@@ -2,6 +2,16 @@
 
 > Complete technical documentation for the personal finance management platform
 
+---
+
+## 🔒 Repository Status: Private Source Code
+
+This repository hosts the architecture documentation and technical design specifications for the Personal Finance Management System.
+
+Due to the inclusion of sensitive financial logic, personal configuration secrets, and proprietary algorithms, the actual source code is maintained in a private repository.
+
+---
+
 ## Quick Navigation
 
 | Section | Description |
