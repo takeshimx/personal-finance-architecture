@@ -44,7 +44,10 @@ A comprehensive full-stack financial management application built with modern we
 
 ### 🔐 Security & Authentication
 - **Firebase Google OAuth**: Secure authentication with email whitelisting
+- **End-to-End Token Verification**: Frontend and backend Firebase ID token validation
+- **Firebase Admin SDK**: Server-side token verification with email whitelist enforcement
 - **Session Management**: 30-minute idle timeout with activity detection
+- **API Security**: All backend endpoints protected with Firebase authentication middleware
 - **Authorized Access**: Email-based access control
 
 ### 📊 Data Visualization
@@ -109,7 +112,8 @@ For a personal finance app with moderate transaction volume, BigQuery's pay-per-
 - **BigQuery Integration**: Optimized SQL queries and data modeling for analytics
 - **Cost-Aware Design**: Serverless architecture minimizing operational costs
 - **Error Handling**: Comprehensive error handling and logging
-- **Authentication**: Secure session management
+- **Authentication Middleware**: FastAPI dependency injection for Firebase token verification
+- **Security Architecture**: All API endpoints protected with `verify_firebase_token` dependency
 
 ### DevOps & Infrastructure
 - **Containerization**: Docker multi-stage builds for optimization
@@ -136,6 +140,74 @@ For a personal finance app with moderate transaction volume, BigQuery's pay-per-
 - **Code Standards**: ESLint, Prettier for consistent code style
 - **Documentation**: Comprehensive inline documentation
 
+## 🔒 Firebase Authentication Implementation
+
+### Architecture Overview
+
+This application implements a **complete end-to-end Firebase authentication system** protecting both frontend access and backend API endpoints.
+
+### Frontend Authentication (`frontend/`)
+
+**Files:**
+- `src/lib/firebase.ts` - Firebase SDK initialization
+- `src/contexts/AuthContext.tsx` - Authentication state management with session timeout
+- `src/lib/api.ts` - API helper functions with automatic token injection
+- `src/components/Login.tsx` - Google OAuth login interface
+
+**Flow:**
+1. User authenticates via Google OAuth (Firebase)
+2. `AuthContext` manages authentication state and session timeout (30 min)
+3. All API calls automatically include Firebase ID token via `apiCall()` helper
+4. Token sent as `Authorization: Bearer <token>` header
+
+### Backend Authentication (`backend/`)
+
+**Files:**
+- `app/config/firebase_config.py` - Firebase Admin SDK initialization
+- `app/dependencies/auth.py` - Authentication middleware with email whitelist
+- All endpoint files - Protected with `Depends(verify_firebase_token)`
+
+**Implementation:**
+```python
+# Firebase Admin SDK initialization
+def initialize_firebase_admin():
+    credentials_json = os.getenv("FIREBASE_ADMIN_CREDENTIALS_JSON")
+    credentials_dict = json.loads(credentials_json)
+    cred = credentials.Certificate(credentials_dict)
+    firebase_admin.initialize_app(cred)
+
+# Authentication middleware
+async def verify_firebase_token(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> dict:
+    auth = get_firebase_auth()
+    decoded_token = auth.verify_id_token(credentials.credentials)
+    email = decoded_token.get('email')
+    if email not in ALLOWED_EMAILS:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return decoded_token
+
+# Protected endpoint example
+@router.get("/api/v1/records")
+async def get_records(token_data: dict = Depends(verify_firebase_token)):
+    # Only accessible with valid Firebase token
+    return records
+```
+
+### Security Features
+
+1. **Email Whitelist**: Only `inthemoshpit@gmail.com` can access the system
+2. **Token Verification**: Every API request verified by Firebase Admin SDK
+3. **Session Management**: 30-minute idle timeout on frontend
+4. **No Public Access**: All endpoints require valid authentication
+5. **Environment Variables**: Secure credential management via Cloud Run secrets
+
+### Deployment Configuration
+
+**Cloud Run Environment Variables:**
+- `FIREBASE_ADMIN_CREDENTIALS_JSON` - Service account credentials (JSON string)
+- Configured via: `gcloud run services update --set-env-vars`
+
 ---
 
-**Note**: This is a personal finance management application developed to demonstrate full-stack development capabilities, cloud deployment skills, and modern web development best practices.
+**Note**: This is a personal finance management application developed to demonstrate full-stack development capabilities, cloud deployment skills, modern web development best practices, and comprehensive security implementation with Firebase authentication.

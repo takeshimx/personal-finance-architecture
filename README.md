@@ -34,6 +34,8 @@ graph TB
     subgraph "External Services"
         Firebase[Firebase Authentication<br/>Google OAuth]
         AlphaVantage[Alpha Vantage API<br/>Stock prices & FX rates]
+        TravelFirestore[Travel Planner Firestore<br/>External trip data]
+        GmailAPI[Gmail API<br/>Transaction email parsing]
     end
 
     subgraph "Frontend Layer - Cloud Run"
@@ -45,7 +47,11 @@ graph TB
     end
 
     subgraph "Data Warehouse - BigQuery"
-        RawData[(Dataset: cbs_data<br/>- daily_transaction_records<br/>- stock_transactions<br/>- current_assets<br/>- budget_tracking<br/>- manual_stock_prices<br/>- latest_stock_prices)]
+        RawData[(Dataset: cbs_data<br/>- daily_transaction_records<br/>- stock_transactions<br/>- current_assets<br/>- budget_tracking<br/>- manual_stock_prices<br/>- latest_stock_prices<br/>- travel_expenses<br/>- pending_transactions)]
+    end
+
+    subgraph "Firestore - Master Data & Patterns"
+        CBSFirestore[(CBS Firestore<br/>- master_data/categories<br/>- master_data/payment_methods<br/>- quick_add_patterns)]
     end
 
     subgraph "CI/CD Pipeline"
@@ -60,7 +66,10 @@ graph TB
     Firebase --> Frontend
     Frontend --> Backend
     Backend --> RawData
+    Backend --> CBSFirestore
     AlphaVantage --> Backend
+    TravelFirestore --> Backend
+    GmailAPI --> Backend
 
     Backend --> QueueProcessor
     QueueProcessor --> RawData
@@ -89,6 +98,9 @@ graph TB
 | **Deployment** | Cloud Run | Serverless container platform |
 | **CI/CD** | Cloud Build + Docker | Automated build, scan, and deployment |
 | **Secrets** | Secret Manager | Secure credential management |
+| **Master Data Storage** | Firestore | Dynamic categories, payment methods, quick add patterns |
+| **External Integration** | Travel Planner (Firestore) | Travel trip data and expense tracking |
+| **Email Automation** | Gmail API | Automated transaction detection from emails |
 
 ---
 
@@ -115,11 +127,14 @@ graph TB
 
 **Pages & Components:**
 - Dashboard (BudgetWatcher)
-- Daily Entry Form (Expense/Income tracking)
+- Daily Entry Form (Expense/Income tracking with Quick Add patterns)
 - Expense Browser (Search & filter transactions)
 - Stock Portfolio (Investment tracking)
 - Listings Manager (Asset management)
 - Advanced Analytics (Financial insights)
+- Travel Expense Tracker (Trip-linked expense management)
+- Pending Transactions (Gmail-fetched transaction review)
+- CSV Upload (Bulk transaction import)
 
 ### 2. Backend API
 
@@ -141,6 +156,12 @@ graph TB
 - `manual_stock_price_service.py` - Manual price entry for unlisted stocks
 - `current_assets_service.py` - Asset snapshots and tracking
 - `queue_service.py` - Retry queue for BigQuery operations
+- `travel_expense_service.py` - Travel expense tracking with trip association
+- `travel_planner_service.py` - External Travel Planner Firestore integration
+- `master_data_service.py` - Dynamic categories and payment methods from Firestore (1hr cache)
+- `csv_upload_service.py` - Bulk transaction import from CSV files
+- `quick_add_service.py` - User-defined expense templates (Firestore)
+- `merchant_categorizer.py` - AI-powered merchant name to category mapping
 
 **Background Processing:**
 - **Queue Service**: Handles failed UPDATE/DELETE operations caused by BigQuery streaming insert buffer
@@ -200,6 +221,35 @@ For a personal finance app with moderate transaction volume, BigQuery's pay-per-
 
 ---
 
+### Gmail Transaction Automation
+
+| Property | Value |
+|----------|-------|
+| **Automation** | Manual trigger or scheduled |
+| **Script** | `gmail_transaction_fetcher.py` |
+| **Data Source** | Gmail API (ANA Pay, Revolut emails) |
+| **Target Emails** | Payment confirmation emails from supported merchants |
+| **Storage** | BigQuery `pending_transactions` table |
+| **Workflow** | Fetch → Parse → Categorize → Pending Review → User Approval |
+| **AI Integration** | Merchant categorization with confidence scoring |
+
+**Pipeline Flow:**
+1. Gmail API fetches payment confirmation emails
+2. Parse email content to extract transaction details (merchant, amount, date)
+3. AI-powered merchant categorizer suggests category with confidence score
+4. Insert into `pending_transactions` table with `is_submitted = FALSE`
+5. Frontend displays pending transactions for user review
+6. User approves/edits transaction details
+7. Move to `daily_transaction_records` with `is_submitted = TRUE`
+
+**Key Features:**
+- **Duplicate Detection**: Uses `source_email_id` (Gmail message ID) to prevent duplicates
+- **Confidence Scoring**: AI categorization includes confidence level (0.0-1.0)
+- **Multi-Source Support**: Handles different email formats (ANA Pay, Revolut, etc.)
+- **User Review Workflow**: All auto-fetched transactions require explicit user approval
+
+---
+
 ## Data Model
 
 ### Core Tables
@@ -212,6 +262,17 @@ For a personal finance app with moderate transaction volume, BigQuery's pay-per-
 | `budget_tracking` | Budget allocations | `budget_id`, `year_month`, `category`, `budget_amount`, `actual_amount` |
 | `manual_stock_prices` | Unlisted stock prices | `ticker_symbol`, `price_date`, `price_usd`, `source` |
 | `latest_stock_prices` | Latest stock price snapshots | `timestamp`, `symbol`, `price`, `usd_jpy_rate`, `price_jpy` |
+| `travel_expenses` | Travel-specific expenses | `travel_expense_id`, `transaction_id`, `travel_id`, `travel_title`, `expense_date`, `item_name`, `item_category`, `price_jpy`, `local_currency`, `local_price`, `payment_method` |
+| `pending_transactions` | Gmail-fetched transactions awaiting approval | `transaction_id`, `recorded_date`, `transaction_type`, `price_jpy`, `item_name`, `item_category`, `payment_method`, `is_submitted`, `source_type`, `source_email_id`, `confidence` |
+
+### Firestore Collections
+
+| Collection | Purpose | Key Fields |
+|------------|---------|------------|
+| `master_data/categories` | Dynamic expense categories | `categories` (array), `updated_at` |
+| `master_data/payment_methods` | Dynamic payment methods | `payment_methods` (array), `updated_at` |
+| `quick_add_patterns/{userId}/patterns` | User expense templates | `pattern_name`, `item_category`, `item_subcategory`, `payment_method`, `price_jpy`, `order` |
+| `travel_planner` (external) | Travel trips from Travel Planner app | `trip_id`, `title`, `start_date`, `end_date`, `destination` |
 
 ### Transaction Categories
 
@@ -385,6 +446,48 @@ sequenceDiagram
 | PUT | `/assets/{asset_id}` | Update asset |
 | DELETE | `/assets/{asset_id}` | Delete asset |
 
+### Travel API (`/api/v1/travel`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/trips` | Get available travel trips from Travel Planner |
+| GET | `/expenses/{travel_id}` | Get expenses for specific trip |
+| POST | `/expenses` | Add travel expense |
+| GET | `/expenses/summary/{travel_id}` | Travel expense summary with category breakdown |
+
+### Master Data API (`/api/v1/master-data`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/categories` | Get dynamic categories (cached 1hr) |
+| GET | `/payment-methods` | Get dynamic payment methods (cached 1hr) |
+| POST | `/cache/clear` | Clear master data cache |
+
+### CSV Upload API (`/api/v1/csv`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/upload` | Bulk import transactions from CSV file |
+
+### Quick Add API (`/api/v1/quick-add`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/patterns` | Get user's quick add patterns |
+| POST | `/patterns` | Create new pattern |
+| PUT | `/patterns/{id}` | Update pattern |
+| DELETE | `/patterns/{id}` | Delete pattern |
+| POST | `/patterns/reorder` | Reorder patterns (drag-and-drop) |
+
+### Pending Transactions API (`/api/v1/pending`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/pending` | Get pending transactions awaiting approval |
+| POST | `/approve` | Approve and move to daily_transaction_records |
+| POST | `/approve-bulk` | Bulk approve multiple pending transactions |
+| DELETE | `/pending/{id}` | Reject pending transaction |
+
 ---
 
 ## GCP Resources
@@ -409,6 +512,8 @@ sequenceDiagram
 - `budget_tracking` - ~1KB-10KB
 - `manual_stock_prices` - ~1KB-10KB
 - `latest_stock_prices` - ~5KB-50KB (historical snapshots)
+- `travel_expenses` - ~10KB-100KB (linked to Travel Planner trips)
+- `pending_transactions` - ~5KB-50KB (partitioned by created_at, clustered by is_submitted)
 
 **Cost Optimization:**
 - No partitioning needed for personal scale
@@ -444,6 +549,28 @@ sequenceDiagram
 - `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` - Firebase storage
 - `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` - Firebase messaging
 - `NEXT_PUBLIC_FIREBASE_APP_ID` - Firebase app ID
+
+### External Integrations
+
+**Travel Planner (Firestore):**
+- **Connection**: External Firestore project for travel trip management
+- **Project ID**: Configured via `TRAVEL_PLANNER_PROJECT_ID` environment variable
+- **Service Account**: `travel-planner-serviceAccountKey.json`
+- **Data Accessed**: Travel trips (title, dates, destinations)
+- **Purpose**: Link expenses to specific travel trips for better expense categorization
+
+**Gmail API:**
+- **Authentication**: OAuth 2.0 with `credentials.json` and `token.pickle`
+- **Scope**: `gmail.readonly` for fetching payment confirmation emails
+- **Usage**: Automated transaction detection from ANA Pay, Revolut emails
+- **Script**: `gmail_transaction_fetcher.py`
+
+**CBS Firestore (Master Data):**
+- **Connection**: Firestore client for dynamic configuration
+- **Service Account**: `firebase-admin-serviceAccountKey.json`
+- **Collections**: `master_data`, `quick_add_patterns`
+- **Caching**: 1-hour cache for categories and payment methods
+- **Purpose**: Eliminate hardcoded categories/payment methods, enable user customization
 
 ---
 
