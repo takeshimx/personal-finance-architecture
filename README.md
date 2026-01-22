@@ -54,9 +54,10 @@ graph TB
         CBSFirestore[(CBS Firestore<br/>- master_data/categories<br/>- master_data/payment_methods<br/>- quick_add_patterns)]
     end
 
-    subgraph "CI/CD Pipeline"
+    subgraph "CI/CD & Management"
         CloudBuild[Cloud Build<br/>Docker Build<br/>Security Scan<br/>Auto Deploy]
         SecretManager[Secret Manager<br/>Firebase Config<br/>API Keys]
+        Terraform[Terraform<br/>Infrastructure as Code<br/>Resource Sync]
     end
 
     subgraph "Background Processing"
@@ -77,6 +78,11 @@ graph TB
     CloudBuild --> Frontend
     CloudBuild --> Backend
     SecretManager --> CloudBuild
+    Terraform --> Frontend
+    Terraform --> Backend
+    Terraform --> RawData
+    Terraform --> SecretManager
+    Terraform --> CloudBuild
 
     style Frontend fill:#4285f4,color:#fff
     style Backend fill:#4285f4,color:#fff
@@ -98,6 +104,7 @@ graph TB
 | **Deployment** | Cloud Run | Serverless container platform |
 | **CI/CD** | Cloud Build + Docker | Automated build, scan, and deployment |
 | **Secrets** | Secret Manager | Secure credential management |
+| **IaC** | Terraform | 100% Infrastructure as Code management |
 | **Master Data Storage** | Firestore | Dynamic categories, payment methods, quick add patterns |
 | **External Integration** | Travel Planner (Firestore) | Travel trip data and expense tracking |
 | **Email Automation** | Gmail API | Automated transaction detection from emails |
@@ -135,6 +142,7 @@ graph TB
 - Travel Expense Tracker (Trip-linked expense management)
 - Pending Transactions (Gmail-fetched transaction review)
 - CSV Upload (Bulk transaction import)
+- AI Chat (SQL Agent natural language data analysis)
 
 ### 2. Backend API
 
@@ -162,6 +170,11 @@ graph TB
 - `csv_upload_service.py` - Bulk transaction import from CSV files
 - `quick_add_service.py` - User-defined expense templates (Firestore)
 - `merchant_categorizer.py` - AI-powered merchant name to category mapping
+- `category_prediction_service.py` - RAG-based transaction categorization with hybrid prediction
+- `vector_search_service.py` - Semantic similarity search using Vertex AI embeddings
+- `correction_service.py` - User correction tracking for feedback loop
+- `sentinel_service.py` - AI-powered portfolio monitoring with Google News RSS + Gemini LLM
+- `notification_service.py` - Discord webhook notifications for portfolio alerts
 
 **Background Processing:**
 - **Queue Service**: Handles failed UPDATE/DELETE operations caused by BigQuery streaming insert buffer
@@ -250,6 +263,106 @@ For a personal finance app with moderate transaction volume, BigQuery's pay-per-
 
 ---
 
+### RAG-Based Category Prediction System
+
+| Property | Value |
+|----------|-------|
+| **System Type** | Hybrid RAG (Retrieval-Augmented Generation) |
+| **Components** | Keyword matching + Vector search + BigQuery + LLM |
+| **Embedding Model** | Vertex AI `text-embedding-004` (768 dimensions) |
+| **Vector Store** | Firestore (`transaction_embeddings` collection) |
+| **LLM** | Gemini API for final prediction |
+| **Dataset Size** | 6K+ transaction embeddings |
+| **Cost** | ~$0.17 for full dataset embedding generation |
+
+**Prediction Flow:**
+
+1. **Keyword Matching** (High Priority)
+   - Check `merchant_mappings.yaml` for exact/pattern matches
+   - If confidence ≥ 0.9, return immediately
+   - Examples: "Seven Elevn" → Food & Drink/Foods (confidence: 1.0)
+
+2. **Vector Search** (Semantic Similarity)
+   - Generate query embedding: `f"商品名: {item_name}, 金額: {amount}円"`
+   - Fetch all embeddings from Firestore
+   - Calculate cosine similarity with NumPy
+   - Return top 5 results with similarity ≥ 0.5
+   - Example: "Seven Elevn 500円" → Similar transactions with 0.76+ similarity
+
+3. **BigQuery Context** (Historical Data)
+   - Query similar transactions from `daily_transaction_records`
+   - Provide additional context for LLM
+
+4. **Gemini API** (Final Prediction)
+   - Combine vector search results + BigQuery examples
+   - Generate final category prediction with reasoning
+   - Return confidence score (0.0-1.0)
+
+**Feedback Loop:**
+
+- **Correction Tracking**: When users modify predicted categories, save to `prediction_corrections` table
+- **Learning Mechanism**: 
+  - Track correction frequency per item
+  - Identify patterns in user corrections
+  - Future: Auto-generate keyword rules from frequent corrections
+- **Visual Indicators**: 
+  - 🔧 = Hardcoded rule (confidence ≥ 0.9)
+  - 🤖 = AI prediction (confidence < 0.9)
+
+**Technical Implementation:**
+
+| Component | Technology | Details |
+|-----------|-----------|---------|
+| **Embedding Generation** | Vertex AI | `text-embedding-004` model, 768-dim vectors |
+| **Vector Storage** | Firestore | Document per transaction with embedding array |
+| **Similarity Calculation** | NumPy | Cosine similarity in Python |
+| **LLM Integration** | Gemini API | Context-augmented prompts |
+| **Correction Storage** | BigQuery | `prediction_corrections` table |
+
+**Performance Metrics:**
+
+- **Query Latency**: ~1-2 seconds (embedding + search + LLM)
+- **Similarity Threshold**: 0.5 minimum, 0.7+ considered high confidence
+- **Cost Efficiency**: $0.00025 per 1,000 characters for embeddings
+
+**Scripts:**
+
+- `generate_embeddings.py` - Batch generate embeddings for all BigQuery transactions
+- `category_prediction_service.py` - Main prediction orchestration
+- `vector_search_service.py` - Firestore vector search implementation
+- `correction_service.py` - User correction tracking and retrieval
+- `sql_agent_service.py` - Natural language to SQL agent with structured output orchestration
+
+---
+
+### SQL Agent with Structured Output
+
+| System Type | Two-Step Reasoning & Formatting Pipeline |
+|-------------|-------------------------------------------|
+| **Core Engine** | LangChain `AgentExecutor` (SQL Agent) |
+| **Structuring** | LLM `with_structured_output` (Pydantic) |
+| **LLM** | Gemini 2.0 Flash (Fast & Accurate) |
+| **Output Format** | Fixed JSON schema (answer, visualization_type, data, columns) |
+
+**Processing Flow:**
+
+1. **Step 1: Data Retrieval (SQL Agent)**
+   - The agent analyzes the user's natural language question.
+   - It autonomously generates and executes SQL queries against BigQuery.
+   - It gathers raw results and formulates a human-readable explanation.
+
+2. **Step 2: Structured Formatting (with_structured_output)**
+   - The raw output from Step 1 is passed to a second LLM call configured with `with_structured_output`.
+   - This step enforces a strict Pydantic-based schema, ensuring that values like `visualization_type` (table/chart/text) and `data` objects are 100% consistent.
+   - The logic automatically detects when trend-based questions require 'chart' instead of 'table'.
+
+**Key Benefits:**
+- **Zero Parsing Errors**: Eliminates the need for fragile regex or text-based parsing of agent thought logs.
+- **Frontend Synergy**: Guarantees that the data structure matches the frontend's expected properties for Recharts and Table components.
+- **Improved Accuracy**: Separating "fact-finding" (SQL) from "presentation" (JSON formatting) allows the LLM to focus on one task at a time.
+
+---
+
 ## Data Model
 
 ### Core Tables
@@ -264,6 +377,7 @@ For a personal finance app with moderate transaction volume, BigQuery's pay-per-
 | `latest_stock_prices` | Latest stock price snapshots | `timestamp`, `symbol`, `price`, `usd_jpy_rate`, `price_jpy` |
 | `travel_expenses` | Travel-specific expenses | `travel_expense_id`, `transaction_id`, `travel_id`, `travel_title`, `expense_date`, `item_name`, `item_category`, `price_jpy`, `local_currency`, `local_price`, `payment_method` |
 | `pending_transactions` | Gmail-fetched transactions awaiting approval | `transaction_id`, `recorded_date`, `transaction_type`, `price_jpy`, `item_name`, `item_category`, `payment_method`, `is_submitted`, `source_type`, `source_email_id`, `confidence` |
+| `prediction_corrections` | User corrections for AI predictions (feedback loop) | `correction_id`, `transaction_id`, `item_name`, `predicted_category`, `corrected_category`, `prediction_method`, `original_confidence`, `corrected_at` |
 
 ### Firestore Collections
 
@@ -272,6 +386,7 @@ For a personal finance app with moderate transaction volume, BigQuery's pay-per-
 | `master_data/categories` | Dynamic expense categories | `categories` (array), `updated_at` |
 | `master_data/payment_methods` | Dynamic payment methods | `payment_methods` (array), `updated_at` |
 | `quick_add_patterns/{userId}/patterns` | User expense templates | `pattern_name`, `item_category`, `item_subcategory`, `payment_method`, `price_jpy`, `order` |
+| `transaction_embeddings` | Vector embeddings for RAG search | `transaction_id`, `item_name`, `embedding` (768-dim vector), `metadata` (category, subcategory, amount) |
 | `travel_planner` (external) | Travel trips from Travel Planner app | `trip_id`, `title`, `start_date`, `end_date`, `destination` |
 
 ### Transaction Categories
@@ -746,6 +861,12 @@ This architecture maintains the same cost efficiency at 10x scale. At 1,000 dail
 
 ### DevOps & Infrastructure
 
+**Infrastructure as Code (IaC):**
+- 100% Google Cloud resources managed via Terraform
+- Resource synchronization and drift detection
+- Professional state management with GCS remote backend
+- Modular configuration with centralized variables
+
 **Containerization:**
 - Docker multi-stage builds
 - Minimal base images (python:slim)
@@ -779,6 +900,7 @@ This architecture maintains the same cost efficiency at 10x scale. At 1,000 dail
 - Serverless architecture design
 - Cost-optimized infrastructure
 - CI/CD pipeline automation
+- Infrastructure as Code (Terraform)
 
 ### Financial Domain
 - Personal finance management
@@ -817,10 +939,10 @@ This architecture maintains the same cost efficiency at 10x scale. At 1,000 dail
 - [ ] Monthly/yearly report generation
 
 ### Infrastructure as Code
-- [ ] Terraform modules for GCP resources
-- [ ] Environment separation (dev/staging/prod)
-- [ ] GitOps workflow
-- [ ] Automated infrastructure testing
+- [x] 100% GCP resource management with Terraform
+- [x] Environment separation via variables
+- [x] Remote state management in GCS
+- [ ] GitOps workflow (Automated Cloud Build integration)
 
 ### Testing & Quality
 - [ ] Frontend unit tests (Jest + RTL)
@@ -883,3 +1005,21 @@ This architecture maintains the same cost efficiency at 10x scale. At 1,000 dail
 ---
 
 **Note**: This is a personal finance management application developed to demonstrate full-stack development capabilities, cloud engineering skills, and financial domain expertise. The architecture is designed for cost optimization, scalability, and maintainability, making it suitable for production use at personal scale.
+
+---
+
+## Infrastructure as Code (Terraform)
+
+The entire infrastructure of this system is managed using Terraform, ensuring 100% parity between the code and the live GCP environment.
+
+### Managed Resources
+- **Compute**: Cloud Run services (`api`, `frontend`)
+- **Storage**: BigQuery Datasets, Firestore Database
+- **Security**: Secret Manager secrets, IAM Role Bindings (17+ policies)
+- **CI/CD**: Cloud Build triggers
+
+### Key IaC Features
+1. **Remote Backend**: State is stored in a GCS bucket (`project-2b-cbs-tfstate`), enabling safe collaboration and persistence.
+2. **Drift Detection**: Any manual changes made in the GCP Console are detected by Terraform, allowing for immediate remediation back to the "source of truth".
+3. **Variable Management**: Environment-specific settings (Project ID, Regions, SA Emails) are centralized in `variables.tf`.
+4. **Safety**: `terraform plan` is used to preview all infrastructure changes before they are applied, preventing accidental resource destruction.

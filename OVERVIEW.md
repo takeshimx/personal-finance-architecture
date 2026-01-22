@@ -16,11 +16,15 @@ A comprehensive full-stack financial management application built with modern we
 - **Google BigQuery** for data warehouse and analytics
 - **BigQuery Client Libraries** for database operations
 - **Uvicorn** ASGI server
+- **Vertex AI** for text embeddings (text-embedding-004)
+- **Gemini API** for LLM-powered category prediction
+- **Firestore** for vector storage and embeddings
 
 ### Infrastructure & Deployment
 - **Google Cloud Run** for containerized deployment
 - **Docker** for containerization
 - **Google Cloud Build** for CI/CD
+- **Terraform** for Infrastructure as Code (IaC) and state management
 - **Firebase** for authentication services
 
 ## 🎯 Key Features
@@ -54,6 +58,34 @@ A comprehensive full-stack financial management application built with modern we
 - **Interactive Charts**: Expense trends, income analysis, portfolio performance
 - **Real-time Updates**: Live data synchronization
 - **Responsive Design**: Mobile-optimized interface
+
+### 🔔 Portfolio Sentinel (AI-Powered Market Monitoring)
+- **Automated News Monitoring**: AI-powered analysis of market news for portfolio holdings
+- **Google News RSS Integration**: Real-time news aggregation from trusted sources
+- **LLM-Powered Filtering**: Gemini 2.0 Flash for intelligent relevance detection
+- **Multi-Category Alerts**: Regulatory, corporate events, and risk factors
+- **Discord Notifications**: Instant alerts via Discord webhooks
+- **Severity Classification**: HIGH/MEDIUM/LOW priority levels
+- **Freshness Guarantee**: Only articles published within the last 7 days
+- **Cost-Optimized**: Fixed query templates + minimal LLM calls
+
+### 🤖 RAG-Based Category Prediction (AI-Powered Transaction Categorization)
+- **Hybrid Prediction System**: Combines keyword matching, vector search, and LLM generation
+- **Vector Search**: Semantic similarity search using Vertex AI text-embedding-004
+- **Firestore Vector Store**: Past transaction embeddings for similarity matching
+- **BigQuery Integration**: Historical transaction data for context augmentation
+- **Gemini API**: Final category prediction with confidence scoring
+- **Feedback Loop**: Learns from user corrections to improve accuracy
+- **Cost-Efficient**: ~$0.17 for full dataset embedding generation
+
+### 💬 SQL Agent (Natural Language Data Analysis)
+- **Two-Step Structured Output**: Reliable data retrieval via SQL Agent + `with_structured_output` for fixed JSON formatting
+- **Autonomous SQL Generation**: LangChain-based agent for intelligent data extraction from BigQuery
+- **Multi-Format Visualization**: Automatic selection of 'table', 'chart' (trend/comparison), or 'text' based on query context
+- **Natural Language Interface**: Supports complex analytical questions in Japanese or English
+- **Reliable JSON Response**: Guaranteed schema consistency for seamless frontend rendering
+- **Gemini 2.0 Flash**: High-speed, high-accuracy LLM orchestration
+- **Chat Interface**: Modern dark mode UI with message history
 
 ## 🏗️ Architecture
 
@@ -114,8 +146,14 @@ For a personal finance app with moderate transaction volume, BigQuery's pay-per-
 - **Error Handling**: Comprehensive error handling and logging
 - **Authentication Middleware**: FastAPI dependency injection for Firebase token verification
 - **Security Architecture**: All API endpoints protected with `verify_firebase_token` dependency
+- **RAG Implementation**: Hybrid prediction system combining vector search, BigQuery, and LLM
+- **Vector Search**: Semantic similarity using Vertex AI embeddings and Firestore
+- **Feedback Loop**: User correction tracking for continuous model improvement
+- **SQL Agent**: Two-step architecture with `with_structured_output` for guaranteed JSON delivery
+- **Structured Data Extraction**: Reliable separation of raw data retrieval and UI-centric formatting
 
 ### DevOps & Infrastructure
+- **Infrastructure as Code (IaC)**: 100% resource management with Terraform
 - **Containerization**: Docker multi-stage builds for optimization
 - **CI/CD**: Automated deployment with Google Cloud Build
 - **Environment Management**: Proper separation of dev/prod environments
@@ -126,9 +164,11 @@ For a personal finance app with moderate transaction volume, BigQuery's pay-per-
 - **Full-Stack Development**: End-to-end application development
 - **Modern Web Technologies**: React, Next.js, TypeScript, Tailwind CSS
 - **Backend Development**: Python, FastAPI, BigQuery, Google Cloud APIs
+- **AI/ML Integration**: RAG systems, vector search, LLM orchestration
 - **Cloud Engineering**: Google Cloud Platform, Docker, CI/CD, Serverless Architecture
+- **Infrastructure as Code**: Terraform, State Management, Resource Synchronization
 - **Authentication & Security**: Firebase, OAuth, session management
-- **Data Engineering**: BigQuery data modeling, cost-optimized analytics
+- **Data Engineering**: BigQuery data modeling, cost-optimized analytics, vector embeddings
 - **API Design**: RESTful API architecture and documentation
 - **DevOps**: Containerization, deployment automation, monitoring
 
