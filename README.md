@@ -175,6 +175,7 @@ graph TB
 - `correction_service.py` - User correction tracking for feedback loop
 - `sentinel_service.py` - AI-powered portfolio monitoring with Google News RSS + Gemini LLM
 - `notification_service.py` - Discord webhook notifications for portfolio alerts
+- `auto_rule_generator.py` - Automated merchant rule proposals from frequent corrections
 
 **Background Processing:**
 - **Queue Service**: Handles failed UPDATE/DELETE operations caused by BigQuery streaming insert buffer
@@ -304,7 +305,7 @@ For a personal finance app with moderate transaction volume, BigQuery's pay-per-
 - **Learning Mechanism**: 
   - Track correction frequency per item
   - Identify patterns in user corrections
-  - Future: Auto-generate keyword rules from frequent corrections
+  - Auto-generate keyword rules from frequent corrections (Self-Healing Pipeline)
 - **Visual Indicators**: 
   - 🔧 = Hardcoded rule (confidence ≥ 0.9)
   - 🤖 = AI prediction (confidence < 0.9)
@@ -327,11 +328,51 @@ For a personal finance app with moderate transaction volume, BigQuery's pay-per-
 
 **Scripts:**
 
-- `generate_embeddings.py` - Batch generate embeddings for all BigQuery transactions
+- `generate_embeddings.py` - Batch and incremental embedding generation for BigQuery transactions
+- `auto_rule_generator.py` - Automated merchant rule proposals from frequent corrections
 - `category_prediction_service.py` - Main prediction orchestration
 - `vector_search_service.py` - Firestore vector search implementation
 - `correction_service.py` - User correction tracking and retrieval
 - `sql_agent_service.py` - Natural language to SQL agent with structured output orchestration
+
+---
+
+### Self-Healing Pipeline (Agentic RAG)
+
+| Property | Value |
+|----------|-------|
+| **System Type** | Agentic Self-Healing Pipeline |
+| **Components** | Auto Rule Generator + Discord HITL + Incremental Embeddings |
+| **Scheduling** | Cloud Run Jobs + Cloud Scheduler (Terraform-managed) |
+| **Approval** | Discord webhook notifications with Approve/Reject links |
+
+**Pipeline Flow:**
+
+1. **Correction Analysis** (Weekly - Sunday 07:00 JST)
+   - Query `prediction_corrections` table for patterns with ≥3 corrections
+   - Cross-reference with existing `merchant_mappings.yaml` rules
+   - Generate new rule proposals for unmatched patterns
+
+2. **Human-in-the-Loop Approval**
+   - Save rule proposals to Firestore `pending_rules` collection
+   - Send Discord notification with pattern details and Approve/Reject links
+   - Approve: Add rule to `merchant_mappings.yaml` and mark as approved
+   - Reject: Mark rule as rejected in Firestore
+
+3. **Incremental Embedding Updates** (Monthly - 1st 07:00 JST)
+   - Fetch existing embedding IDs from Firestore
+   - Query BigQuery for new transactions not yet embedded
+   - Generate embeddings for only new transactions (cost-optimized)
+   - Store in Firestore `transaction_embeddings` collection
+
+**Infrastructure:**
+
+| Resource | Purpose | Schedule |
+|----------|---------|----------|
+| Cloud Run Job `auto-rule-generator` | Execute auto rule generation script | Weekly |
+| Cloud Run Job `embedding-updater` | Execute incremental embedding script | Monthly |
+| Cloud Scheduler `auto-rule-weekly` | Trigger auto rule job | `0 7 * * 0` |
+| Cloud Scheduler `embedding-monthly` | Trigger embedding job | `0 7 1 * *` |
 
 ---
 
@@ -387,6 +428,7 @@ For a personal finance app with moderate transaction volume, BigQuery's pay-per-
 | `master_data/payment_methods` | Dynamic payment methods | `payment_methods` (array), `updated_at` |
 | `quick_add_patterns/{userId}/patterns` | User expense templates | `pattern_name`, `item_category`, `item_subcategory`, `payment_method`, `price_jpy`, `order` |
 | `transaction_embeddings` | Vector embeddings for RAG search | `transaction_id`, `item_name`, `embedding` (768-dim vector), `metadata` (category, subcategory, amount) |
+| `pending_rules` | Auto-generated rule proposals awaiting HITL approval | `pattern`, `category`, `subcategory`, `count`, `status` (pending/approved/rejected), `created_at` |
 | `travel_planner` (external) | Travel trips from Travel Planner app | `trip_id`, `title`, `start_date`, `end_date`, `destination` |
 
 ### Transaction Categories
@@ -613,6 +655,13 @@ sequenceDiagram
 |--------------|--------|--------------|---------------|--------|-----|------|
 | `project-2b-cbs-v1-api` | asia-northeast1 | 0 | 10 | 2GB | 1 | 8080 |
 | `project-2b-cbs-v1-frontend` | asia-northeast1 | 0 | 10 | 512MB | 1 | 8080 |
+
+### Cloud Run Jobs
+
+| Job Name | Schedule | Purpose |
+|----------|----------|--------|
+| `auto-rule-generator` | Weekly (Sun 07:00 JST) | Auto rule generation from frequent corrections |
+| `embedding-updater` | Monthly (1st 07:00 JST) | Incremental embedding updates for new transactions |
 
 ### BigQuery Dataset
 

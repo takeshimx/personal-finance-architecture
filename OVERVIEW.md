@@ -87,6 +87,13 @@ A comprehensive full-stack financial management application built with modern we
 - **Gemini 2.0 Flash**: High-speed, high-accuracy LLM orchestration
 - **Chat Interface**: Modern dark mode UI with message history
 
+### 🔄 Self-Healing Pipeline (Agentic RAG)
+- **Auto Rule Generator**: Automatically proposes new merchant categorization rules from frequent user corrections
+- **Human-in-the-Loop**: Discord notifications with Approve/Reject links for rule proposals
+- **Incremental Embedding Updates**: Monthly batch job to embed only new transactions (cost-optimized)
+- **Cloud Run Jobs + Cloud Scheduler**: Fully automated weekly/monthly scheduled execution via Terraform
+- **Feedback-Driven Learning**: Closes the loop between user corrections and system improvement
+
 ## 🏗️ Architecture
 
 ```
@@ -149,6 +156,7 @@ For a personal finance app with moderate transaction volume, BigQuery's pay-per-
 - **RAG Implementation**: Hybrid prediction system combining vector search, BigQuery, and LLM
 - **Vector Search**: Semantic similarity using Vertex AI embeddings and Firestore
 - **Feedback Loop**: User correction tracking for continuous model improvement
+- **Self-Healing Pipeline**: Auto-rule generation from corrections with Discord HITL approval workflow
 - **SQL Agent**: Two-step architecture with `with_structured_output` for guaranteed JSON delivery
 - **Structured Data Extraction**: Reliable separation of raw data retrieval and UI-centric formatting
 
@@ -156,6 +164,7 @@ For a personal finance app with moderate transaction volume, BigQuery's pay-per-
 - **Infrastructure as Code (IaC)**: 100% resource management with Terraform
 - **Containerization**: Docker multi-stage builds for optimization
 - **CI/CD**: Automated deployment with Google Cloud Build
+- **Scheduled Jobs**: Cloud Run Jobs + Cloud Scheduler for automated batch processing
 - **Environment Management**: Proper separation of dev/prod environments
 - **Monitoring**: Health checks and logging for production readiness
 
@@ -164,7 +173,7 @@ For a personal finance app with moderate transaction volume, BigQuery's pay-per-
 - **Full-Stack Development**: End-to-end application development
 - **Modern Web Technologies**: React, Next.js, TypeScript, Tailwind CSS
 - **Backend Development**: Python, FastAPI, BigQuery, Google Cloud APIs
-- **AI/ML Integration**: RAG systems, vector search, LLM orchestration
+- **AI/ML Integration**: RAG systems, vector search, LLM orchestration, self-healing pipelines
 - **Cloud Engineering**: Google Cloud Platform, Docker, CI/CD, Serverless Architecture
 - **Infrastructure as Code**: Terraform, State Management, Resource Synchronization
 - **Authentication & Security**: Firebase, OAuth, session management
